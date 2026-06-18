@@ -171,7 +171,7 @@ class _RegistroAguaScreenState extends State<RegistroAguaScreen> {
           backgroundColor: latitudFinal != null ? Colors.green : Colors.blue,
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _procesandoGuardado = false);

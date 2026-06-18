@@ -5,7 +5,11 @@ import '../screens/registro_residuo.dart';
 import '../screens/historial_registro.dart';
 
 class BitacorasGrid extends StatelessWidget {
-  const BitacorasGrid({super.key});
+  // 1. Agregamos la variable para recibir el aviso desde el Home
+  final VoidCallback? onActualizar;
+
+  // 2. Modificamos el constructor para aceptar esa variable
+  const BitacorasGrid({super.key, this.onActualizar});
 
   @override
   Widget build(BuildContext context) {
@@ -21,34 +25,55 @@ class BitacorasGrid extends StatelessWidget {
           'AGUA',
           Icons.water_drop,
           Colors.blue.shade600,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const RegistroAguaScreen()),
-          ),
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const RegistroAguaScreen(),
+              ),
+            ).then((seGuardo) {
+              // 3. Atrapar el aviso: Si guardó algo, le avisamos al Home
+              if (seGuardo == true && onActualizar != null) {
+                onActualizar!();
+              }
+            });
+          },
         ),
         _buildRegistryCard(
           context,
           'ALIMENTOS',
           Icons.restaurant,
           Colors.orange.shade700,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const RegistroAlimentosScreen(),
-            ),
-          ),
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const RegistroAlimentosScreen(),
+              ),
+            ).then((seGuardo) {
+              if (seGuardo == true && onActualizar != null) {
+                onActualizar!();
+              }
+            });
+          },
         ),
         _buildRegistryCard(
           context,
           'RESIDUOS',
           Icons.recycling,
           Colors.brown.shade700,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const RegistroResiduosScreen(),
-            ),
-          ),
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const RegistroResiduosScreen(),
+              ),
+            ).then((seGuardo) {
+              if (seGuardo == true && onActualizar != null) {
+                onActualizar!();
+              }
+            });
+          },
         ),
         _buildRegistryCard(
           context,
@@ -60,7 +85,7 @@ class BitacorasGrid extends StatelessWidget {
             MaterialPageRoute(
               builder: (context) => const HistorialRegistrosScreen(),
             ),
-          ),
+          ), // Nota: El historial no necesita .then() porque ahí no se guarda nada nuevo
         ),
       ],
     );

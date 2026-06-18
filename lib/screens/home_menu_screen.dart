@@ -7,7 +7,6 @@ import '../widgets/bitacoras_grid.dart';
 import '../widgets/semaforo_inteligente.dart';
 import 'login_screen.dart';
 import 'estadisticas_screen.dart';
-// --- NUEVAS IMPORTACIONES ---
 import 'informe_screen.dart';
 import '../services/sincronizacion.dart';
 
@@ -20,6 +19,9 @@ class HomeMenuScreen extends StatefulWidget {
 
 class _HomeMenuScreenState extends State<HomeMenuScreen> {
   String _nombreUsuario = 'Usuario';
+
+  // Llave maestra para forzar la recarga de los semáforos
+  Key _semaforosKey = UniqueKey();
 
   final List<String> _consejosEcologicos = [
     'Reduce el consumo de plásticos de un solo uso en la cafetería.',
@@ -61,6 +63,17 @@ class _HomeMenuScreenState extends State<HomeMenuScreen> {
     );
   }
 
+  // Método que recarga los datos cuando el usuario desliza hacia abajo o regresa de registrar
+  Future<void> _recargarPantalla() async {
+    setState(() {
+      // Al cambiar la llave, Flutter destruye los semáforos viejos
+      // y crea unos nuevos, obligándolos a consultar la base de datos.
+      _semaforosKey = UniqueKey();
+      _consejoDelDia =
+          _consejosEcologicos[Random().nextInt(_consejosEcologicos.length)];
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,7 +86,6 @@ class _HomeMenuScreenState extends State<HomeMenuScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // --- BOTÓN DE SINCRONIZACIÓN ACTUALIZADO ---
           IconButton(
             icon: const Icon(Icons.cloud_upload, color: Colors.blueAccent),
             tooltip: 'Sincronizar a la Nube',
@@ -84,13 +96,9 @@ class _HomeMenuScreenState extends State<HomeMenuScreen> {
                 ),
               );
 
-              // 1. Obtenemos la instancia de SharedPreferences
               final prefs = await SharedPreferences.getInstance();
-
-              // 2. Recuperamos el ID real del usuario logueado (con 1 de respaldo en caso de error)
               int userId = prefs.getInt('user_id') ?? 1;
 
-              // 3. Pasamos el ID dinámico al servicio
               bool exito = await Sincronizacion.sincronizarDatos(userId);
 
               if (!mounted) return;
@@ -106,7 +114,6 @@ class _HomeMenuScreenState extends State<HomeMenuScreen> {
               );
             },
           ),
-          // Botón original de cerrar sesión
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.redAccent),
             tooltip: 'Cerrar Sesión',
@@ -114,66 +121,80 @@ class _HomeMenuScreenState extends State<HomeMenuScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Eco-Bitácora CIIDIR',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-                fontWeight: FontWeight.w500,
+      body: RefreshIndicator(
+        onRefresh: _recargarPantalla,
+        color: Colors.green,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Eco-Bitácora CIIDIR',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const Text(
-              'Resumen del día',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-
-            _buildInfoCard(
-              'CONSEJO DEL DÍA',
-              _consejoDelDia,
-              Icons.lightbulb_outline,
-              Colors.amber.shade100,
-            ),
-            const SizedBox(height: 25),
-
-            const Text(
-              'BITÁCORAS DE REGISTRO',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.0,
+              const Text(
+                'Resumen del día',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 15),
-            const BitacorasGrid(),
+              const SizedBox(height: 20),
 
-            const SizedBox(height: 30),
+              _buildInfoCard(
+                'CONSEJO DEL DÍA',
+                _consejoDelDia,
+                Icons.lightbulb_outline,
+                Colors.amber.shade100,
+              ),
+              const SizedBox(height: 25),
 
-            _buildBotonEstadisticas(context),
+              const Text(
+                'BITÁCORAS DE REGISTRO',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 15),
 
-            const SizedBox(height: 15), // Espaciador
-            // --- BOTÓN DE INFORME QUINCENAL ---
-            _buildBotonInformeQuincenal(context),
+              // --- ¡AQUÍ ESTÁ EL CAMBIO CLAVE! ---
+              // Le quitamos el "const" y le inyectamos la función _recargarPantalla
+              BitacorasGrid(onActualizar: _recargarPantalla),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 30),
 
-            const Text(
-              'ESTADO AMBIENTAL POR EJE',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 15),
+              _buildBotonEstadisticas(context),
 
-            const SemaforoInteligente(eje: 'Agua'),
-            const SemaforoInteligente(eje: 'Alimentos'),
-            const SemaforoInteligente(eje: 'Residuos'),
+              const SizedBox(height: 15),
+              _buildBotonInformeQuincenal(context),
 
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 30),
+
+              const Text(
+                'ESTADO AMBIENTAL POR EJE',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 15),
+
+              KeyedSubtree(
+                key: _semaforosKey,
+                child: const Column(
+                  children: [
+                    SemaforoInteligente(eje: 'Agua'),
+                    SemaforoInteligente(eje: 'Alimentos'),
+                    SemaforoInteligente(eje: 'Residuos'),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );

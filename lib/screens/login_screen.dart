@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // Para kIsWeb
 import 'package:http/http.dart' as http;
 import 'package:eco_bitacora/screens/home_menu_screen.dart';
 import 'package:flutter/material.dart';
@@ -14,45 +13,56 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _userController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passController = TextEditingController();
   final _confirmPassController = TextEditingController();
 
   bool isLogin = true;
-  bool _procesando = false; // Indicador de carga para bloquear el botón
+  bool _procesando = false;
 
-  // Getter de IP dinámica (Igual que en sincronizacion.dart)
   String get baseUrl {
-    if (kIsWeb) return 'http://127.0.0.1:8000/api';
-    return 'http://192.168.1.75:8000/api'; // <-- CAMBIA ESTO POR TU IP REAL
+    return 'https://eco-bitacora-backend.onrender.com/api';
   }
 
-  // Ahora guardamos la sesión y el ID real devuelto por la nube
-  Future<void> _guardarSesion(int userId) async {
+  Future<void> _guardarSesion(int userId, String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isLoggedIn', true);
     await prefs.setInt('user_id', userId);
+    await prefs.setString(
+      'auth_token',
+      token,
+    ); // <-- GUARDAMOS EL TOKEN EN MEMORIA
   }
 
   void _procesarFormulario() async {
     String user = _userController.text.trim();
     String pass = _passController.text;
+    String email = _emailController.text.trim();
 
+    // Validación básica
     if (user.isEmpty || pass.length < 4) {
       _mostrarError('Usuario o contraseña inválidos (mínimo 4 caracteres)');
       return;
     }
 
+    // Validación exclusiva de registro
+    if (!isLogin) {
+      if (email.isEmpty || !email.contains('@')) {
+        _mostrarError('Por favor ingresa un correo electrónico válido');
+        return;
+      }
+      if (pass != _confirmPassController.text) {
+        _mostrarError('Las contraseñas no coinciden');
+        return;
+      }
+    }
+
     setState(() => _procesando = true);
-    FocusScope.of(context).unfocus(); // Ocultamos el teclado
+    FocusScope.of(context).unfocus();
 
     try {
       if (!isLogin) {
         // --- PETICIÓN DE REGISTRO ---
-        if (pass != _confirmPassController.text) {
-          _mostrarError('Las contraseñas no coinciden');
-          setState(() => _procesando = false);
-          return;
-        }
         final response = await http
             .post(
               Uri.parse('$baseUrl/registro'),
@@ -60,12 +70,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
               },
-              body: jsonEncode({'usuario': user, 'password': pass}),
+              body: jsonEncode({
+                'usuario': user,
+                'email': email,
+                'password': pass,
+              }),
             )
             .timeout(const Duration(seconds: 10));
+
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          await _guardarSesion(data['user_id']);
+          // CORRECCIÓN: Ahora pasamos el ID y el Token
+          await _guardarSesion(data['user_id'], data['token']);
           _navegarAlHome();
         } else {
           final data = jsonDecode(response.body);
@@ -83,9 +99,11 @@ class _LoginScreenState extends State<LoginScreen> {
               body: jsonEncode({'usuario': user, 'password': pass}),
             )
             .timeout(const Duration(seconds: 10));
+
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          await _guardarSesion(data['user_id']);
+          // CORRECCIÓN: Ahora pasamos el ID y el Token
+          await _guardarSesion(data['user_id'], data['token']);
           _navegarAlHome();
         } else {
           _mostrarError('Credenciales inválidas o usuario no existe');
@@ -116,6 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _userController.dispose();
+    _emailController.dispose();
     _passController.dispose();
     _confirmPassController.dispose();
     super.dispose();
@@ -148,6 +167,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icon(Icons.person),
                 ),
               ),
+              if (!isLogin) ...[
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Correo Electrónico',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                ),
+              ],
               const SizedBox(height: 15),
               TextField(
                 controller: _passController,
@@ -171,8 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
               const SizedBox(height: 25),
-
-              // Botón con indicador de carga
               ElevatedButton(
                 onPressed: _procesando ? null : _procesarFormulario,
                 style: ElevatedButton.styleFrom(
@@ -202,6 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         setState(() {
                           isLogin = !isLogin;
                           _userController.clear();
+                          _emailController.clear();
                           _passController.clear();
                           _confirmPassController.clear();
                         });

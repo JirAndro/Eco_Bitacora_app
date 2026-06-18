@@ -1,19 +1,12 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // Para detectar si es Web
+// Importamos SharedPreferences para leer la llave de seguridad
+import 'package:shared_preferences/shared_preferences.dart';
 import 'database_helper.dart';
 
 class Sincronizacion {
-  // Getter dinámico para la URL
-  static String get apiUrl {
-    if (kIsWeb) {
-      // Si corres en Microsoft Edge
-      return 'http://127.0.0.1:8000/api/sincronizar';
-    } else {
-      // REEMPLAZA ESTO CON LA IP QUE TE DIO EL IPCONFIG (Ej. 192.168.1.75)
-      return 'http://192.168.13.63:8000/api/sincronizar';
-    }
-  }
+  // Como ya está en producción, usamos una constante directa
+  static const String apiUrl = 'https://eco-bitacora-backend.onrender.com/api';
 
   static Future<bool> sincronizarDatos(int userId) async {
     final dbHelper = DatabaseHelper();
@@ -25,6 +18,10 @@ class Sincronizacion {
         print('Todo al día: No hay registros pendientes.');
         return true;
       }
+
+      // --- 1. RECUPERAMOS EL TOKEN MAESTRO DE LA MEMORIA ---
+      final prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString('auth_token');
 
       List<Map<String, dynamic>> registrosArray = pendientes.map((r) {
         return {
@@ -43,18 +40,21 @@ class Sincronizacion {
 
       final payload = {'user_id': userId, 'registros': registrosArray};
 
-      // Agregamos el TIMEOUT de 10 segundos para evitar que la app se congele
+      // --- 2. ENVIAMOS LA PETICIÓN CON EL CANDADO DE SEGURIDAD ---
       final response = await http
           .post(
-            Uri.parse(apiUrl),
+            Uri.parse('$apiUrl/sincronizar'),
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
+              // Si el token existe, lo adjuntamos como salvoconducto
+              if (token != null) 'Authorization': 'Bearer $token',
             },
             body: jsonEncode(payload),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 60));
 
+      // 3. ANALIZAMOS LA RESPUESTA
       if (response.statusCode == 200) {
         List<String> uuidsEnviados = pendientes.map((r) => r.uuid).toList();
         await dbHelper.marcarComoSincronizados(uuidsEnviados);
@@ -62,11 +62,11 @@ class Sincronizacion {
         print('¡Éxito!: ${response.body}');
         return true;
       } else {
-        print('Error del servidor: ${response.statusCode}');
+        // Si el token falló, Laravel responderá con un 401 Unauthorized aquí
+        print('Error del servidor: ${response.statusCode} - ${response.body}');
         return false;
       }
     } catch (e) {
-      // Si la IP está mal o el firewall bloquea, caerá aquí inmediatamente
       print('Falla de red o conexión rechazada: $e');
       return false;
     }
